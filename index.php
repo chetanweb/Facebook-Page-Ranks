@@ -1,26 +1,24 @@
 <?php
-
-
 require 'facebook.php';
 include 'config.php';
 
 $facebook = new Facebook(array(
-  'appId'  => $appid,
-  'secret' => $secret,
-));
+  			'appId'  => $appid,
+  			'secret' => $secret,
+  			'cookie' => true
+			));
 
 
 $user = $facebook->getUser();
 
 
 if ($user) {
-  try {
-  
-    $user_profile = $facebook->api('/me');
-  } catch (FacebookApiException $e) {
-    error_log($e);
-    $user = null;
-  }
+	try {
+		$user_profile = $facebook->api('/me');
+	} catch (FacebookApiException $e) {
+		error_log($e);
+		$user = null;
+	}
 }
 
 $param=array();
@@ -37,32 +35,42 @@ if ($user) {
 
 if($user)
 {
-   $access_token=$facebook->getAccessToken();
+	$access_token=$facebook->getAccessToken();
+  
+	$stream = $facebook->api(
+		"/$source_ids/feed?limit=50",
+		'GET',
+		array(
+			'access_token' => $access_token
+		)
+	);
+	
+	$posters=array();
 
-  include("class.XMLHttpRequest.php");
-  include("sort.php");
-   $req=new XMLHttpRequest();
-   $req->open("GET","https://api.facebook.com/method/stream.get?access_token=$access_token&source_ids=$source_ids&format=json");
-   $req->send();
-   $responseText=$req->responseText;
-   $req->close();
-   $data=json_decode($responseText);
-   $posters=array();
-   
-   foreach($data->posts as $post)
-   {
-    $actor=number_format($post->actor_id,0,'','');
-    $post_size=strlen($post->message);
-  
-  
-    $actor_data=json_decode(file_get_contents("http://graph.facebook.com/$actor?format=json"));
-    $posters[$actor_data->name][textsize]+=$post_size;
-    $posters[$actor_data->name][number]++;
-    $posters[$actor_data->name][name]=$actor_data->name;
-    $posters[$actor_data->name][id]=$actor_data->id;
-    
-    
-   }
+	foreach($stream['data'] as $post) {
+	
+		if(isset($post['message'])) {				
+			$post_size=strlen($post['message']);
+		}
+		
+		$posters[$post['from']['name']]['name']	= $post['from']['name'];
+		
+		if(!isset($posters[$post['from']['name']]['textsize'])){
+			$posters[$post['from']['name']]['textsize']	= $post_size;			
+		} else {
+			$posters[$post['from']['name']]['textsize']	+= $post_size;
+		}
+
+    	$posters[$post['from']['name']]['id'] = $post['from']['id'];
+
+		if(!isset($posters[$post['from']['name']]['number'])){
+			$posters[$post['from']['name']]['number'] = 1;
+		} else {	
+			$posters[$post['from']['name']]['number']++;
+		}
+	}
+	
+   include("sort.php");
    $posters=array_sort($posters,'textsize',SORT_ASC);
    $posters=array_sort($posters,'number',SORT_DESC);
 
@@ -77,7 +85,7 @@ if($user)
 $i=1;
 foreach($posters as $poster)
 {
-    echo "<tr><td><h2>$i</h2></td><td><img src='https://graph.facebook.com/$poster[id]/picture'></td><td>$poster[name]</td><td>$poster[name] made $poster[number] posts using $poster[textsize] Characters</td></tr>";
+    echo "<tr><td><h2>$i</h2></td><td><img src='https://graph.facebook.com/$poster[id]/picture'></td><td>$poster[name]</td><td>made $poster[number] posts using $poster[textsize] Characters</td></tr>";
   $i++;
   if($i==11){break;}  
 }
