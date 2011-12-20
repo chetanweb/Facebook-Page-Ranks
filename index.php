@@ -16,7 +16,7 @@ if ($user) {
 	try {
 		$user_profile = $facebook->api('/me');
 	} catch (FacebookApiException $e) {
-		error_log($e);
+		var_dump($e);
 		$user = null;
 	}
 }
@@ -36,44 +36,54 @@ if ($user) {
 if($user)
 {
 	$access_token=$facebook->getAccessToken();
-  
-	$stream = $facebook->api(
-		"/$source_ids/feed?limit=50",
-		'GET',
-		array(
-			'access_token' => $access_token
-		)
-	);
+    
+    // Use 'since' parameter to get posts from a particular date
+    // Use 'limit' and 'offset' to page
+    // More documetation at https://developers.facebook.com/docs/reference/api/
+    try {	
+		$stream = $facebook->api(
+			"/$source_ids/feed?limit=500",
+			'GET',
+			array(
+				'access_token' => $access_token
+			)
+		);
+	} catch  (FacebookApiException $e) {
+		var_dump($e);
+	}
 	
-	$posters=array();
-
+	$posters = $textsize = $numbers = array();
+	
 	foreach($stream['data'] as $post) {
 	
 		if(isset($post['message'])) {				
 			$post_size=strlen($post['message']);
 		}
 		
-		$posters[$post['from']['name']]['name']	= $post['from']['name'];
+		$posters[$post['from']['id']]['name']	= $post['from']['name'];
 		
-		if(!isset($posters[$post['from']['name']]['textsize'])){
-			$posters[$post['from']['name']]['textsize']	= $post_size;			
+		if(!isset($posters[$post['from']['id']]['textsize'])){
+			$posters[$post['from']['id']]['textsize']	= $post_size;
+
 		} else {
-			$posters[$post['from']['name']]['textsize']	+= $post_size;
+			$posters[$post['from']['id']]['textsize']	+= $post_size;
 		}
 
-    	$posters[$post['from']['name']]['id'] = $post['from']['id'];
+		$textsize[$post['from']['id']] = $posters[$post['from']['id']]['textsize'];
+		
+    	$posters[$post['from']['id']]['id'] = $post['from']['id'];
 
-		if(!isset($posters[$post['from']['name']]['number'])){
-			$posters[$post['from']['name']]['number'] = 1;
+		if(!isset($posters[$post['from']['id']]['number'])){
+			$posters[$post['from']['id']]['number'] = 1;
 		} else {	
-			$posters[$post['from']['name']]['number']++;
+			$posters[$post['from']['id']]['number']++;
 		}
+		
+		$numbers[$post['from']['id']] = $posters[$post['from']['id']]['number'];
 	}
-	
-   include("sort.php");
-   $posters=array_sort($posters,'textsize',SORT_ASC);
-   $posters=array_sort($posters,'number',SORT_DESC);
 
+	array_multisort($numbers, SORT_DESC, $textsize, SORT_DESC, $posters);
+	
 }
 
 ?>
@@ -97,7 +107,7 @@ foreach($posters as $poster)
     <!doctype html>
 <html xmlns:fb="http://www.facebook.com/2008/fbml">
 <head>
-<title><?php echo $title; ?></title>
+<title>Top users of <?php echo $source_name; ?></title>
 </head>
 <body>
 
